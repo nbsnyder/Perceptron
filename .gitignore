@@ -1,0 +1,10 @@
+# system files
+.DS_Store
+.vscode
+
+# testing files
+Perceptron
+*.h
+*.o
+*.hi
+testfiles
