@@ -10,43 +10,46 @@ the C code: c_readVal to read a value from a C array and c_writeVal to write a v
 module Neuron where
 
 import Foreign.Ptr (Ptr)
+import Foreign.C.Types (CInt(..), CDouble(..))
 
 -- Read a value from a C array
 -- This function is defined in the C code as readFromDblArr(double*, int)
 -- Parameters: (1) pointer to the C array of type double*, (2) index of the array
-foreign import ccall unsafe "readFromDblArr" c_readVal :: Ptr Double -> Int -> Double
+foreign import ccall unsafe "readFromDblArr" c_readVal :: Ptr CDouble -> CInt -> CDouble
 
 -- Write a single value to a C array
 -- This function is defined in the C code as writeToDblArr(double*, int, double)
 -- Parameters: (1) pointer to the C array of type double*, (2) index of the array, (3) value to write
-foreign import ccall unsafe "writeToDblArr" c_writeVal :: Ptr Double -> Int -> Double -> IO()
+foreign import ccall unsafe "writeToDblArr" c_writeVal :: Ptr CDouble -> CInt -> CDouble -> IO()
 
--- Convert a section of a C array to a Haskell list of type [Double]
+-- Convert a section of a C array to a Haskell list of type [CDouble]
 -- Parameters: (1) pointer to the C array of type double*, (2) start of the subarray, (3) length of the subarray
-readCArrToList :: Ptr Double -> Int -> Int -> [Double]
-readCArrToList ptr start length = map (c_readVal ptr . (+ start)) [0..(length-1)]
+readCArrToList :: Ptr CDouble -> CInt -> CInt -> [CDouble]
+readCArrToList ptr start length = map (c_readVal ptr . (+ start)) [0 .. (length - 1)]
 
--- Convert an entire 2D C array to a Haskell list of type [[Double]]
+-- Convert an entire 2D C array to a Haskell list of type [[CDouble]]
 -- Parameters: (1) pointer to the C array of type double*, (2) major length of the array, (3) minor length of the array
-readCArrArrToList :: Ptr Double -> Int -> Int -> [[Double]]
-readCArrArrToList ptr size1 size2 = map ((\i -> readCArrToList ptr i size2) . (* size2)) [0..(size1 - 1)]
+readCArrArrToList :: Ptr CDouble -> CInt -> CInt -> [[CDouble]]
+readCArrArrToList ptr size1 size2 = map ((\i -> readCArrToList ptr i size2) . (* size2)) [0 .. (size1 - 1)]
 
 -- Write an entire Haskell list to a C array by repeatedly calling c_writeVal
--- Parameters: (1) pointer to the C array of type double*, (2) index of the array, (3) haskell list to write
-writeListToCArr :: Ptr Double -> Int -> [Double] -> IO()
-writeListToCArr ptr start hlist
-    | null hlist = return ()
-    | otherwise = do
-        c_writeVal ptr start (head hlist)
-        writeListToCArr ptr (start + 1) (tail hlist)
+-- Parameters: (1) pointer to the C array of type double*, (2) haskell list to write
+writeListToCArr :: Ptr CDouble -> [CDouble] -> IO()
+writeListToCArr ptr = aux 0
+    where
+        aux index list
+            | null list = return ()
+            | otherwise = do
+                c_writeVal ptr index (head list)
+                aux (index + 1) (tail list)
 
 -- Get the dot product of two lists
-getDotProduct :: [Double] -> [Double] -> Double
+getDotProduct :: [CDouble] -> [CDouble] -> CDouble
 getDotProduct arr1 arr2 = sum $ zipWith (*) arr1 arr2
 
 -- Change the weights list based on the input and output
 -- Return the updated weights list
-changeWeight :: [Double] -> [Double] -> Double -> [Double]
+changeWeight :: [CDouble] -> [CDouble] -> CDouble -> [CDouble]
 changeWeight input weights output
     | (output * getDotProduct input weights) > 0 = weights
     | otherwise = zipWith (+) weights $ map (* learningRateMultiplier) input
@@ -56,7 +59,7 @@ changeWeight input weights output
 
 -- Build up the list of weights by changing the weights for each input
 -- Return the final weights list
-buildWeightsList :: [[Double]] -> [Double] -> [Double] -> [Double]
+buildWeightsList :: [[CDouble]] -> [CDouble] -> [CDouble] -> [CDouble]
 buildWeightsList inputs weights outputs
     | null outputs = weights
     | otherwise = buildWeightsList (tail inputs) newWeights (tail outputs)
@@ -67,13 +70,13 @@ buildWeightsList inputs weights outputs
 -- This function is exported to be called from the C code
 -- Parameters: (1) the inputs array (C pointer to 2D array), (2) the weights array (double*), (3) the outputs array (double*)
 -- Parameters (cont.): (4) the major length of the inputs array, (5) the minor length of the inputs array
-getWeights :: Ptr Double -> Ptr Double -> Ptr Double -> Int -> Int -> IO()
-getWeights inputs weights outputs size1 size2 = writeListToCArr weights 0 $ buildWeightsList inputsArr zerosArr outputsArr
+getWeights :: Ptr CDouble -> Ptr CDouble -> Ptr CDouble -> CInt -> CInt -> IO()
+getWeights inputs weights outputs size1 size2 = writeListToCArr weights $ buildWeightsList inputsArr zerosArr outputsArr
     where
-        -- Retrieve the inputs array and format it into a Haskell list of type [[Double]]
+        -- Retrieve the inputs array and format it into a Haskell list of type [[CDouble]]
         inputsArr = readCArrArrToList inputs size1 size2
         -- Start the weights as a list of all 0s
-        zerosArr = replicate size2 0
-        -- Retrive the outputs array and format it into a Haskell list of type [Double]
+        zerosArr = replicate (fromIntegral size2) 0
+        -- Retrive the outputs array and format it into a Haskell list of type [CDouble]
         outputsArr = readCArrToList outputs 0 size1
-foreign export ccall getWeights :: Ptr Double -> Ptr Double -> Ptr Double -> Int -> Int -> IO()
+foreign export ccall getWeights :: Ptr CDouble -> Ptr CDouble -> Ptr CDouble -> CInt -> CInt -> IO()

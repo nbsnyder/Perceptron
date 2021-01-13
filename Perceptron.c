@@ -20,7 +20,7 @@ Defined in neuron.hs
 Parameters: (1) the inputs array (double*), (2) the weights array (double*), (3) the outputs array (double*)
 Parameters (cont.): (4) the major length of the inputs array, (5) the minor length of the inputs array
 */
-extern void getWeights(HsPtr a1, HsPtr a2, HsPtr a3, HsInt a4, HsInt a5);
+extern void getWeights(HsPtr a1, HsPtr a2, HsPtr a3, HsInt32 a4, HsInt32 a5);
 
 
 
